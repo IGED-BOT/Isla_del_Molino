@@ -1,0 +1,1472 @@
+================================================================================
+  COMPUTACIÓN GRÁFICA 2026-II
+  COMPLETO
+  Extracción de Pasos 0–15 (Sistema Solar) + Estructura del Proyecto
+  Isla con Molino (WebGL2 puro, sin Three.js, sin Blender, sin bundlers)
+================================================================================
+
+CONTENIDO
+--------------------------------------------------------------------------------
+  PARTE I    - ENTORNO Y FILOSOFÍA DEL CURSO
+  PARTE II   - INICIALIZACIÓN DE WEBGL2
+  PARTE III  - PIPELINE GRÁFICO Y CADENA DE TRANSFORMACIÓN
+  PARTE IV   - SHADERS GLSL ES 3.00
+  PARTE V    - BUFFERS, VAOs E ÍNDICES
+  PARTE VI   - MATEMÁTICAS: VECTORES Y MATRICES
+  PARTE VII  - GEOMETRÍA PROCEDURAL
+  PARTE VIII - COLORES Y COORDENADAS
+  PARTE IX   - ILUMINACIÓN
+  PARTE X    - TEXTURAS Y UV
+  PARTE XI   - ÓRBITAS Y JERARQUÍA
+  PARTE XII  - RENDER LOOP Y DELTATIME
+  PARTE XIII - CÁMARA INTERACTIVA
+  PARTE XIV  - MULTI-OBJETO Y MULTI-SHADER
+  PARTE XV   - CONCEPTOS TRANSVERSALES
+  PARTE XVI  - RESUMEN DE FÓRMULAS CLAVE
+  PARTE XVII - LO QUE AÚN NO SE HA HECHO
+  PARTE XVIII- ESTRUCTURA DEL PROYECTO ISLA-MOLINO
+  PARTE XIX  - RESPONSABILIDAD DE CADA CARPETA
+  PARTE XX   - MAPEO DE OBJETOS A GEOMETRÍA
+  PARTE XXI  - MAPEO DE SISTEMAS A ARCHIVOS
+  PARTE XXII - CONVENCIONES Y ORDEN DE CONSTRUCCIÓN
+  PARTE XXIII- ÁRBOL FINAL RESUMIDO
+
+
+================================================================================
+PARTE I — ENTORNO Y FILOSOFÍA DEL CURSO
+================================================================================
+
+NÚCLEO TECNOLÓGICO DE LA UNIDAD I
+--------------------------------------------------------------------------------
+  Antigravity + HTML5 + JavaScript + WebGL 2.0 + GLSL ES 3.00
+
+HERRAMIENTAS QUE NO SE USAN INICIALMENTE
+--------------------------------------------------------------------------------
+  - Node.js / npm ............ No son dependencias del proyecto
+  - Vite / Webpack ........... Se evitan para mantener estructura transparente
+  - React / Vue / Angular .... No aportan al objetivo de CG
+  - Three.js (Unidad I) ...... Abstraería los componentes a comprender
+  - glMatrix ................. Se implementan vectores y matrices propias
+  - WebGPU ................... Se estudia al final, después de WebGL
+
+ESTRUCTURA INICIAL DEL PROYECTO (Sistema Solar)
+--------------------------------------------------------------------------------
+  sistema-solar/
+  ├── index.html
+  ├── js/
+  │   └── main.js
+  └── shaders/           (se crea después)
+
+CRITERIO PEDAGÓGICO
+--------------------------------------------------------------------------------
+  "No utilizar una herramienta que resuelva automáticamente aquello que el
+   estudiante todavía necesita comprender."
+
+  Unidad I ....... Se construye y comprende (WebGL2 directo)
+  Unidad II ...... Se usan abstracciones profesionales (Three.js) y se comparan
+  Al final ....... Codex para repotenciar, manteniendo control y comprensión
+
+
+================================================================================
+PARTE II — INICIALIZACIÓN DE WEBGL2 (PASO 1)
+================================================================================
+
+CÓDIGO MÍNIMO
+--------------------------------------------------------------------------------
+  const canvas = document.getElementById("glCanvas");
+  const gl = canvas.getContext("webgl2");
+
+  if (!gl) {
+      throw new Error("WebGL2 no está disponible en este navegador.");
+  }
+
+  gl.viewport(0, 0, canvas.width, canvas.height);
+  gl.clearColor(0.0, 0.0, 0.0, 1.0);
+  gl.clear(gl.COLOR_BUFFER_BIT);
+
+TABLA DE INSTRUCCIONES
+--------------------------------------------------------------------------------
+  getElementById("glCanvas")      Obtiene el canvas del HTML
+  getContext("webgl2")            Solicita contexto WebGL 2.0
+  if (!gl)                        Verifica disponibilidad
+  gl.viewport(...)                Área de renderizado
+  gl.clearColor(...)              Color de limpieza (RGBA)
+  gl.clear(COLOR_BUFFER_BIT)      Limpia framebuffer
+
+CONCEPTOS NUEVOS
+--------------------------------------------------------------------------------
+  - Canvas ................ Superficie HTML donde se muestra la imagen
+  - Contexto WebGL2 ....... Objeto principal de acceso a WebGL
+  - Viewport .............. Región del canvas usada para renderizar
+  - Framebuffer ........... Conjunto de buffers donde WebGL genera la imagen
+  - Color buffer .......... Buffer con información de color por píxel
+  - Clear ................. Operación que reinicia un buffer
+
+
+================================================================================
+PARTE III — PIPELINE GRÁFICO Y CADENA DE TRANSFORMACIÓN
+================================================================================
+
+FLUJO CONCEPTUAL (PASO 2)
+--------------------------------------------------------------------------------
+  JavaScript → Vértices → Buffer → Vertex Shader → Rasterización
+  → Fragment Shader → Framebuffer → Canvas
+
+CADENA DE TRANSFORMACIÓN 3D (PASO 6)
+--------------------------------------------------------------------------------
+  Pclip = Pprojection · Vview · Mmodel · Plocal
+
+  MATRIZ        RESPONSABILIDAD
+  ------------  --------------------------------------------------------
+  Model         Dónde está el objeto, rotación, escala
+  View          Desde dónde observamos (cámara)
+  Projection    Cómo convertimos profundidad 3D a imagen con perspectiva
+
+ESPACIOS DE COORDENADAS
+--------------------------------------------------------------------------------
+  Local/Modelo .......... Coordenadas originales del objeto
+  Mundo ................. Tras aplicar Model
+  Vista/Cámara .......... Representación desde la cámara
+  Clip .................. Tras aplicar Projection
+  NDC ................... Tras división por W (≈ -1 a 1)
+
+
+================================================================================
+PARTE IV — SHADERS GLSL ES 3.00
+================================================================================
+
+VERTEX SHADER BÁSICO (PASO 2)
+--------------------------------------------------------------------------------
+  #version 300 es
+  in vec2 aPosition;
+  void main() {
+      gl_Position = vec4(aPosition, 0.0, 1.0);
+  }
+
+FRAGMENT SHADER BÁSICO (PASO 2)
+--------------------------------------------------------------------------------
+  #version 300 es
+  precision highp float;
+  out vec4 outColor;
+  void main() {
+      outColor = vec4(1.0, 0.75, 0.1, 1.0);
+  }
+
+VERTEX SHADER CON MATRIZ 3×3 (PASO 3)
+--------------------------------------------------------------------------------
+  #version 300 es
+  in vec2 aPosition;
+  uniform mat3 uModelMatrix;
+  void main() {
+      vec3 posicionLocal = vec3(aPosition, 1.0);
+      vec3 posicionTransformada = uModelMatrix * posicionLocal;
+      gl_Position = vec4(posicionTransformada.xy, 0.0, 1.0);
+  }
+
+VERTEX SHADER 3D COMPLETO (PASO 6)
+--------------------------------------------------------------------------------
+  #version 300 es
+  in vec3 aPosition;
+  in vec3 aColor;
+  uniform mat4 uModelMatrix;
+  uniform mat4 uViewMatrix;
+  uniform mat4 uProjectionMatrix;
+  out vec3 vColor;
+  void main() {
+      gl_Position = uProjectionMatrix * uViewMatrix * uModelMatrix
+                    * vec4(aPosition, 1.0);
+      vColor = aColor;
+  }
+
+VERTEX SHADER CON NORMALES Y UV (PASO 9/10/12)
+--------------------------------------------------------------------------------
+  #version 300 es
+  in vec3 aPosition;
+  in vec3 aNormal;
+  in vec2 aTexCoord;
+
+  uniform mat4 uModelMatrix;
+  uniform mat4 uViewMatrix;
+  uniform mat4 uProjectionMatrix;
+
+  out vec3 vNormal;
+  out vec3 vWorldPosition;
+  out vec2 vTexCoord;
+
+  void main() {
+      vec4 worldPosition = uModelMatrix * vec4(aPosition, 1.0);
+      gl_Position = uProjectionMatrix * uViewMatrix * worldPosition;
+      vWorldPosition = worldPosition.xyz;
+      vNormal = normalize(mat3(uModelMatrix) * aNormal);
+      vTexCoord = aTexCoord;
+  }
+
+FRAGMENT SHADER CON ILUMINACIÓN PUNTUAL (PASO 12)
+--------------------------------------------------------------------------------
+  #version 300 es
+  precision highp float;
+
+  in vec3 vNormal;
+  in vec3 vWorldPosition;
+  in vec2 vTexCoord;
+
+  uniform sampler2D uTexture;
+  uniform vec3 uLightPosition;
+  uniform bool uEmissive;
+
+  out vec4 outColor;
+
+  void main() {
+      vec3 colorTextura = texture(uTexture, vTexCoord).rgb;
+
+      if (uEmissive) {
+          outColor = vec4(colorTextura, 1.0);
+          return;
+      }
+
+      vec3 N = normalize(vNormal);
+      vec3 L = normalize(uLightPosition - vWorldPosition);
+
+      float difusa = max(dot(N, L), 0.0);
+      float ambiente = 0.08;
+
+      vec3 colorFinal = colorTextura * (ambiente + difusa);
+      outColor = vec4(colorFinal, 1.0);
+  }
+
+SHADER DE LÍNEAS (PASO 14)
+--------------------------------------------------------------------------------
+  // Vertex
+  #version 300 es
+  in vec3 aPosition;
+  uniform mat4 uModelMatrix;
+  uniform mat4 uViewMatrix;
+  uniform mat4 uProjectionMatrix;
+  void main() {
+      gl_Position = uProjectionMatrix * uViewMatrix * uModelMatrix
+                    * vec4(aPosition, 1.0);
+  }
+
+  // Fragment
+  #version 300 es
+  precision highp float;
+  uniform vec3 uColor;
+  out vec4 outColor;
+  void main() {
+      outColor = vec4(uColor, 1.0);
+  }
+
+TIPOS DE VARIABLES EN GLSL
+--------------------------------------------------------------------------------
+  in .......... Atributo por vértice (Vertex) / varying de entrada (Fragment)
+  out ......... Varying de salida (Vertex) / color final (Fragment)
+  uniform ..... Valor constante para toda la draw call
+  vec2/3/4 .... Vectores de 2/3/4 componentes
+  mat3/mat4 ... Matrices 3×3 / 4×4
+  sampler2D ... Textura 2D
+  bool ........ Booleano
+
+COMPILACIÓN Y ENLACE
+--------------------------------------------------------------------------------
+  function crearShader(gl, tipo, codigoFuente) {
+      const shader = gl.createShader(tipo);
+      gl.shaderSource(shader, codigoFuente);
+      gl.compileShader(shader);
+
+      if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+          const error = gl.getShaderInfoLog(shader);
+          gl.deleteShader(shader);
+          throw new Error("Error al compilar shader:\n" + error);
+      }
+      return shader;
+  }
+
+  const vertexShader = crearShader(gl, gl.VERTEX_SHADER, vertexShaderSource);
+  const fragmentShader = crearShader(gl, gl.FRAGMENT_SHADER, fragmentShaderSource);
+
+  const program = gl.createProgram();
+  gl.attachShader(program, vertexShader);
+  gl.attachShader(program, fragmentShader);
+  gl.linkProgram(program);
+
+  if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+      throw new Error("Error al enlazar programa:\n" + gl.getProgramInfoLog(program));
+  }
+
+
+================================================================================
+PARTE V — BUFFERS, VAOs E ÍNDICES
+================================================================================
+
+BUFFER DE VÉRTICES
+--------------------------------------------------------------------------------
+  const vertexBuffer = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
+  gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
+
+BUFFER DE ÍNDICES (PASO 5)
+--------------------------------------------------------------------------------
+  const indexBuffer = gl.createBuffer();
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
+  gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, gl.STATIC_DRAW);
+
+VAO (VERTEX ARRAY OBJECT)
+--------------------------------------------------------------------------------
+  const vao = gl.createVertexArray();
+  gl.bindVertexArray(vao);
+
+CONFIGURACIÓN DE ATRIBUTOS
+--------------------------------------------------------------------------------
+  Sin stride (Paso 2):
+    const positionLocation = gl.getAttribLocation(program, "aPosition");
+    gl.enableVertexAttribArray(positionLocation);
+    gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
+
+  Con stride para posición + color (Paso 5):
+    const stride = 6 * Float32Array.BYTES_PER_ELEMENT; // x,y,z,r,g,b
+    gl.vertexAttribPointer(positionLocation, 3, gl.FLOAT, false, stride, 0);
+    gl.vertexAttribPointer(colorLocation, 3, gl.FLOAT, false, stride,
+                           3 * Float32Array.BYTES_PER_ELEMENT);
+
+  Con stride para posición + normal + UV (Paso 9/10):
+    const stride = 8 * Float32Array.BYTES_PER_ELEMENT; // x,y,z,nx,ny,nz,u,v
+    gl.vertexAttribPointer(positionLocation, 3, gl.FLOAT, false, stride, 0);
+    gl.vertexAttribPointer(normalLocation, 3, gl.FLOAT, false, stride,
+                           3 * Float32Array.BYTES_PER_ELEMENT);
+    gl.vertexAttribPointer(texCoordLocation, 2, gl.FLOAT, false, stride,
+                           6 * Float32Array.BYTES_PER_ELEMENT);
+
+DRAW CALLS
+--------------------------------------------------------------------------------
+  gl.drawArrays(gl.TRIANGLES, 0, 3)                                Sin índices
+  gl.drawArrays(gl.LINE_LOOP, 0, n)                               Órbitas
+  gl.drawElements(gl.TRIANGLES, indices.length, gl.UNSIGNED_SHORT, 0)  Con índices
+
+PRIMITIVAS USADAS
+--------------------------------------------------------------------------------
+  TRIANGLES, POINTS, LINE_LOOP, LINES
+
+
+================================================================================
+PARTE VI — MATEMÁTICAS: VECTORES Y MATRICES
+================================================================================
+
+VECTORES 3D (FUNCIONES PROPIAS)
+--------------------------------------------------------------------------------
+  function restarVec3(a, b) {
+      return [a[0]-b[0], a[1]-b[1], a[2]-b[2]];
+  }
+  function longitudVec3(v) {
+      return Math.hypot(v[0], v[1], v[2]);
+  }
+  function normalizarVec3(v) {
+      const l = longitudVec3(v);
+      return [v[0]/l, v[1]/l, v[2]/l];
+  }
+  function productoCruz(a, b) {
+      return [
+          a[1]*b[2] - a[2]*b[1],
+          a[2]*b[0] - a[0]*b[2],
+          a[0]*b[1] - a[1]*b[0]
+      ];
+  }
+
+MATRICES 3×3 (PASO 3)
+--------------------------------------------------------------------------------
+  function matrizIdentidad() {
+      return new Float32Array([1,0,0, 0,1,0, 0,0,1]);
+  }
+  function matrizTraslacion(tx, ty) {
+      return new Float32Array([1,0,0, 0,1,0, tx,ty,1]);
+  }
+  function matrizRotacion(anguloRadianes) {
+      const c = Math.cos(anguloRadianes);
+      const s = Math.sin(anguloRadianes);
+      return new Float32Array([c,s,0, -s,c,0, 0,0,1]);
+  }
+  function matrizEscala(sx, sy) {
+      return new Float32Array([sx,0,0, 0,sy,0, 0,0,1]);
+  }
+  function multiplicarMat3(a, b) {
+      const resultado = new Float32Array(9);
+      for (let columna = 0; columna < 3; columna++) {
+          for (let fila = 0; fila < 3; fila++) {
+              let suma = 0;
+              for (let k = 0; k < 3; k++) {
+                  suma += a[k*3 + fila] * b[columna*3 + k];
+              }
+              resultado[columna*3 + fila] = suma;
+          }
+      }
+      return resultado;
+  }
+
+  Composición: M = T · R · S  (S primero, luego R, luego T)
+
+MATRICES 4×4 (PASO 5)
+--------------------------------------------------------------------------------
+  function matrizIdentidad4() {
+      return new Float32Array([
+          1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1
+      ]);
+  }
+  function matrizTraslacion4(tx, ty, tz) {
+      return new Float32Array([
+          1,0,0,0, 0,1,0,0, 0,0,1,0, tx,ty,tz,1
+      ]);
+  }
+  function matrizEscala4(sx, sy, sz) {
+      return new Float32Array([
+          sx,0,0,0, 0,sy,0,0, 0,0,sz,0, 0,0,0,1
+      ]);
+  }
+  function matrizRotacionX(angulo) {
+      const c = Math.cos(angulo), s = Math.sin(angulo);
+      return new Float32Array([
+          1,0,0,0, 0,c,s,0, 0,-s,c,0, 0,0,0,1
+      ]);
+  }
+  function matrizRotacionY(angulo) {
+      const c = Math.cos(angulo), s = Math.sin(angulo);
+      return new Float32Array([
+          c,0,-s,0, 0,1,0,0, s,0,c,0, 0,0,0,1
+      ]);
+  }
+  function matrizRotacionZ(angulo) {
+      const c = Math.cos(angulo), s = Math.sin(angulo);
+      return new Float32Array([
+          c,s,0,0, -s,c,0,0, 0,0,1,0, 0,0,0,1
+      ]);
+  }
+  function multiplicarMat4(a, b) {
+      const resultado = new Float32Array(16);
+      for (let columna = 0; columna < 4; columna++) {
+          for (let fila = 0; fila < 4; fila++) {
+              let suma = 0;
+              for (let k = 0; k < 4; k++) {
+                  suma += a[k*4 + fila] * b[columna*4 + k];
+              }
+              resultado[columna*4 + fila] = suma;
+          }
+      }
+      return resultado;
+  }
+
+  NOTA: WebGL almacena matrices en ORDEN DE COLUMNAS (column-major).
+
+MATRIZ DE PERSPECTIVA (PASO 6)
+--------------------------------------------------------------------------------
+  function matrizPerspectiva(fovRadianes, aspect, near, far) {
+      const f = 1.0 / Math.tan(fovRadianes / 2);
+      const nf = 1 / (near - far);
+
+      return new Float32Array([
+          f/aspect, 0, 0, 0,
+          0, f, 0, 0,
+          0, 0, (far+near)*nf, -1,
+          0, 0, (2*far*near)*nf, 0
+      ]);
+  }
+
+MATRIZ LOOKAT (PASO 6)
+--------------------------------------------------------------------------------
+  function matrizLookAt(eye, target, up) {
+      const zAxis = normalizarVec3(restarVec3(eye, target));
+      const xAxis = normalizarVec3(productoCruz(up, zAxis));
+      const yAxis = productoCruz(zAxis, xAxis);
+
+      return new Float32Array([
+          xAxis[0], yAxis[0], zAxis[0], 0,
+          xAxis[1], yAxis[1], zAxis[1], 0,
+          xAxis[2], yAxis[2], zAxis[2], 0,
+          -(xAxis[0]*eye[0] + xAxis[1]*eye[1] + xAxis[2]*eye[2]),
+          -(yAxis[0]*eye[0] + yAxis[1]*eye[1] + yAxis[2]*eye[2]),
+          -(zAxis[0]*eye[0] + zAxis[1]*eye[1] + zAxis[2]*eye[2]),
+          1
+      ]);
+  }
+
+ENVÍO DE UNIFORMS
+--------------------------------------------------------------------------------
+  gl.uniformMatrix4fv(location, false, matrix);  // mat4
+  gl.uniformMatrix3fv(location, false, matrix);  // mat3
+  gl.uniform3fv(location, [x, y, z]);            // vec3
+  gl.uniform3f(location, x, y, z);               // vec3
+  gl.uniform1f(location, valor);                 // float
+  gl.uniform1i(location, valor);                 // int / bool / sampler
+
+
+================================================================================
+PARTE VII — GEOMETRÍA PROCEDURAL
+================================================================================
+
+ESFERA POR LATITUD/LONGITUD (PASO 7)
+--------------------------------------------------------------------------------
+  ECUACIONES:
+    x = r · sin(φ) · cos(θ)
+    y = r · cos(φ)
+    z = r · sin(φ) · sin(θ)
+  donde φ = latitud (0 a π), θ = longitud (0 a 2π).
+
+  function crearEsfera(radio, segmentosLatitud, segmentosLongitud) {
+      const vertices = [];
+      const indices = [];
+
+      for (let latitud = 0; latitud <= segmentosLatitud; latitud++) {
+          const v = latitud / segmentosLatitud;
+          const phi = v * Math.PI;
+
+          for (let longitud = 0; longitud <= segmentosLongitud; longitud++) {
+              const u = longitud / segmentosLongitud;
+              const theta = u * Math.PI * 2;
+
+              const nx = Math.sin(phi) * Math.cos(theta);
+              const ny = Math.cos(phi);
+              const nz = Math.sin(phi) * Math.sin(theta);
+
+              const x = radio * nx;
+              const y = radio * ny;
+              const z = radio * nz;
+
+              vertices.push(x, y, z);       // posición
+              vertices.push(nx, ny, nz);    // normal (esfera centrada en origen)
+              vertices.push(u, 1.0 - v);    // UV
+          }
+      }
+
+      const columnas = segmentosLongitud + 1;
+
+      for (let latitud = 0; latitud < segmentosLatitud; latitud++) {
+          for (let longitud = 0; longitud < segmentosLongitud; longitud++) {
+              const actual = latitud * columnas + longitud;
+              const siguiente = actual + columnas;
+
+              indices.push(actual, siguiente, actual + 1);
+              indices.push(siguiente, siguiente + 1, actual + 1);
+          }
+      }
+
+      return {
+          vertices: new Float32Array(vertices),
+          indices: new Uint16Array(indices)
+      };
+  }
+
+  COSTO GEOMÉTRICO:
+    Latitud | Longitud | Triángulos
+    --------+----------+-----------
+       8    |    12    |    192
+      16    |    24    |    768
+      32    |    48    |   3072
+      64    |    96    |  12288
+
+CUBO CON ÍNDICES (PASO 5)
+--------------------------------------------------------------------------------
+  8 vértices únicos, 12 triángulos (6 caras × 2 triángulos).
+  Cada vértice: x,y,z,r,g,b.
+
+ÓRBITA CIRCULAR (PASO 14)
+--------------------------------------------------------------------------------
+  function crearOrbita(radio, segmentos = 128) {
+      const puntos = [];
+      for (let i = 0; i < segmentos; i++) {
+          const t = i / segmentos;
+          const angulo = t * Math.PI * 2.0;
+          puntos.push(
+              radio * Math.cos(angulo),  // x
+              0.0,                       // y
+              radio * Math.sin(angulo)   // z
+          );
+      }
+      return new Float32Array(puntos);
+  }
+  Se dibuja con gl.LINE_LOOP.
+
+
+================================================================================
+PARTE VIII — COLORES Y COORDENADAS
+================================================================================
+
+SISTEMA DE COLOR RGB
+--------------------------------------------------------------------------------
+  - Rango en GLSL ......... 0.0 a 1.0
+  - Rango en JS (texturas)  0 a 255 (Uint8Array)
+  - Cada vértice puede llevar r, g, b como atributo (Paso 5)
+  - Ejemplo: outColor = vec4(1.0, 0.75, 0.1, 1.0);  → naranja
+
+SISTEMAS DE COORDENADAS
+--------------------------------------------------------------------------------
+  Sistema   | Rango        | Uso
+  ----------+--------------+-----------------------------
+  NDC       | -1 a 1       | Salida del Vertex Shader
+  UV        | 0 a 1        | Coordenadas de textura
+  Mundo     | arbitrario   | Posición 3D real
+  Local     | arbitrario   | Coordenadas propias del objeto
+
+EJES
+--------------------------------------------------------------------------------
+  X ... horizontal (izquierda/derecha)
+  Y ... vertical (arriba/abajo)
+  Z ... profundidad (adelante/atrás)
+  W ... componente homogénea (1 para puntos, 0 para direcciones)
+
+
+================================================================================
+PARTE IX — ILUMINACIÓN
+================================================================================
+
+ILUMINACIÓN DIFUSA DE LAMBERT (PASO 8)
+--------------------------------------------------------------------------------
+  FÓRMULA:
+    I = max(0, N · L)
+
+  N ... normal normalizada
+  L ... dirección hacia la luz normalizada
+  · ... producto punto
+
+COMPONENTES
+--------------------------------------------------------------------------------
+  Ambient ..... Evita zonas totalmente negras (0.08 – 0.20)
+  Diffuse ..... Depende de N·L
+  Color base .. Color propio del cuerpo
+
+LUZ DIRECCIONAL VS PUNTUAL
+--------------------------------------------------------------------------------
+  Tipo          | Dato             | Comportamiento
+  --------------+------------------+--------------------------------
+  Direccional   | uLightDirection  | Rayos paralelos
+  Puntual       | uLightPosition   | Dirección cambia por fragmento
+
+  LUZ PUNTUAL (Paso 12):
+    vec3 L = normalize(uLightPosition - vWorldPosition);
+    float difusa = max(dot(N, L), 0.0);
+
+TRANSFORMACIÓN DE NORMALES
+--------------------------------------------------------------------------------
+  Simplificación usada: mat3(uModelMatrix) * aNormal
+  Correcta para rotaciones y escala uniforme.
+  Para escala no uniforme se necesita:
+      NormalMatrix = transpose(inverse(mat3(Model)))
+
+CUERPO EMISIVO
+--------------------------------------------------------------------------------
+  - El Sol usa uEmissive = true → muestra textura sin iluminación.
+  - Los planetas usan uEmissive = false → textura × iluminación.
+
+
+================================================================================
+PARTE X — TEXTURAS Y UV
+================================================================================
+
+TEXTURA PROCEDURAL (PASO 9)
+--------------------------------------------------------------------------------
+  function crearTexturaProcedural(gl) {
+      const ancho = 8, alto = 4;
+      const datos = new Uint8Array(ancho * alto * 4);
+
+      for (let y = 0; y < alto; y++) {
+          for (let x = 0; x < ancho; x++) {
+              const i = (y * ancho + x) * 4;
+              const bloque = (x + y) % 2;
+              if (bloque === 0) {
+                  datos[i]   = 255; datos[i+1] = 150;
+                  datos[i+2] = 20;  datos[i+3] = 255;
+              } else {
+                  datos[i]   = 20;  datos[i+1] = 70;
+                  datos[i+2] = 180; datos[i+3] = 255;
+              }
+          }
+      }
+
+      const textura = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, textura);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, ancho, alto, 0,
+                    gl.RGBA, gl.UNSIGNED_BYTE, datos);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      return textura;
+  }
+
+TEXTURA REAL CON CARGA ASÍNCRONA (PASO 10)
+--------------------------------------------------------------------------------
+  function cargarTextura(url) {
+      const textura = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, textura);
+
+      // Píxel temporal blanco
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA,
+                    gl.UNSIGNED_BYTE, new Uint8Array([255, 255, 255, 255]));
+
+      const imagen = new Image();
+      imagen.onload = () => {
+          gl.bindTexture(gl.TEXTURE_2D, textura);
+          gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+          gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA,
+                        gl.UNSIGNED_BYTE, imagen);
+          gl.generateMipmap(gl.TEXTURE_2D);
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER,
+                           gl.LINEAR_MIPMAP_LINEAR);
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      };
+      imagen.src = url;
+      return textura;
+  }
+
+TEXTURA DE COLOR SÓLIDO (PASO 13)
+--------------------------------------------------------------------------------
+  function crearTexturaColor(r, g, b, a = 255) {
+      const textura = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, textura);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA,
+                    gl.UNSIGNED_BYTE, new Uint8Array([r, g, b, a]));
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      return textura;
+  }
+
+ASOCIACIÓN TEXTURA ↔ SAMPLER
+--------------------------------------------------------------------------------
+  gl.activeTexture(gl.TEXTURE0);
+  gl.bindTexture(gl.TEXTURE_2D, textura);
+  gl.uniform1i(textureLocation, 0);  // uTexture usa unidad 0
+
+PARÁMETROS DE TEXTURA
+--------------------------------------------------------------------------------
+  TEXTURE_MIN_FILTER ... LINEAR, LINEAR_MIPMAP_LINEAR
+  TEXTURE_MAG_FILTER ... LINEAR, NEAREST
+  TEXTURE_WRAP_S ....... REPEAT, CLAMP_TO_EDGE
+  TEXTURE_WRAP_T ....... CLAMP_TO_EDGE
+
+COSTURA DE LA ESFERA
+--------------------------------------------------------------------------------
+  Se duplica la columna de vértices con u = 1 para evitar mezclar extremos
+  de la textura. Geométricamente coincide con u = 0, pero UV distinto.
+
+
+================================================================================
+PARTE XI — ÓRBITAS Y JERARQUÍA
+================================================================================
+
+ROTACIÓN VS REVOLUCIÓN
+--------------------------------------------------------------------------------
+  Movimiento    | Qué cambia                          | Ejemplo
+  --------------+-------------------------------------+-------------------
+  Rotación      | Orientación del objeto              | Tierra girando
+  Revolución    | Posición alrededor de otro punto    | Tierra orbitando
+
+MATRIZ DE ÓRBITA (PASO 11)
+--------------------------------------------------------------------------------
+  Mórbita = RY(θórbita) · T(distancia, 0, 0)
+
+  COMPOSICIÓN COMPLETA DE LA TIERRA:
+    MTierra = Rórbita · Tdistancia · Rpropia · S
+
+  LECTURA DE DERECHA A IZQUIERDA:
+    1. S .......... escala
+    2. Rpropia .... gira sobre su eje
+    3. Tdistancia . coloca a distancia orbital
+    4. Rórbita .... gira todo el sistema alrededor del origen
+
+JERARQUÍA SOL → TIERRA → LUNA (PASO 13)
+--------------------------------------------------------------------------------
+  Matriz del sistema Tierra:
+    const tierraSistema = multiplicarMat4(
+        rotacionY(orbitaTierra),
+        traslacion(3.5, 0.0, 0.0)
+    );
+
+  Tierra visual:
+    const tierraVisualLocal = multiplicarMat4(
+        rotacionY(giroTierra),
+        escala(0.55, 0.55, 0.55)
+    );
+    const modelTierra = multiplicarMat4(tierraSistema, tierraVisualLocal);
+
+  Luna (hereda tierraSistema, NO modelTierra):
+    const lunaOrbitaLocal = multiplicarMat4(
+        rotacionZ(inclinacionLuna),
+        multiplicarMat4(rotacionY(orbitaLuna), traslacion(0.95, 0.0, 0.0))
+    );
+    const lunaSistemaMundo = multiplicarMat4(tierraSistema, lunaOrbitaLocal);
+
+    const lunaVisualLocal = multiplicarMat4(
+        rotacionY(giroLuna),
+        escala(0.18, 0.18, 0.18)
+    );
+    const modelLuna = multiplicarMat4(lunaSistemaMundo, lunaVisualLocal);
+
+  REGLA CLAVE:
+    La Luna hereda la TRANSFORMACIÓN DE SISTEMA (tierraSistema),
+    no la ESCALA VISUAL (modelTierra).
+    Si heredara la escala, la órbita lunar se deformaría.
+
+GRAFO DE ESCENA CONCEPTUAL (PASO 13)
+--------------------------------------------------------------------------------
+  Sol
+  └── Sistema Tierra
+      ├── Tierra
+      └── Sistema Luna
+          └── Luna
+
+INCLINACIÓN ORBITAL (PASO 14)
+--------------------------------------------------------------------------------
+  const inclinacionLuna = 20 * Math.PI / 180;
+  const planoOrbitalLuna = multiplicarMat4(tierraSistema,
+                                           rotacionZ(inclinacionLuna));
+  La misma inclinación debe aplicarse tanto a la línea orbital como a la Luna.
+
+
+================================================================================
+PARTE XII — RENDER LOOP Y DELTATIME
+================================================================================
+
+ESTRUCTURA BÁSICA (PASO 4)
+--------------------------------------------------------------------------------
+  let angulo = 0.0;
+  let tiempoAnterior = 0.0;
+  const velocidadAngular = 60 * Math.PI / 180; // rad/s
+
+  function render(tiempoActual) {
+      const tiempoSegundos = tiempoActual * 0.001;
+      let deltaTime = tiempoSegundos - tiempoAnterior;
+      tiempoAnterior = tiempoSegundos;
+
+      if (deltaTime > 0.1) deltaTime = 0.0;  // evitar salto inicial
+
+      angulo += velocidadAngular * deltaTime;
+
+      // ... construir matriz y dibujar
+
+      requestAnimationFrame(render);
+  }
+  requestAnimationFrame(render);
+
+FÓRMULA DE INTEGRACIÓN TEMPORAL
+--------------------------------------------------------------------------------
+  incremento = velocidadAngular × deltaTime
+
+  Por qué NO usar ángulo += 0.01:
+    Depende de los FPS del equipo. Con deltaTime la velocidad es
+    independiente del hardware.
+
+SEPARACIÓN ACTUALIZAR/RENDERIZAR
+--------------------------------------------------------------------------------
+  Actualizar .... modificar estado (ángulos, posiciones, velocidades)
+  Renderizar .... construir matrices, enviar a GPU, dibujar
+
+REQUESTANIMATIONFRAME
+--------------------------------------------------------------------------------
+  - No es un while tradicional.
+  - Solicita al navegador ejecutar render antes del siguiente refresco.
+  - Entrega timestamp en milisegundos.
+
+
+================================================================================
+PARTE XIII — CÁMARA INTERACTIVA (PASO 15)
+================================================================================
+
+MODELO DE CÁMARA ORBITAL
+--------------------------------------------------------------------------------
+  ESTADO:
+    const camera = {
+        target: [0.0, 0.0, 0.0],
+        distancia: 11.5,
+        azimut: 0.0,
+        elevacion: 0.42,
+        distanciaMin: 3.0,
+        distanciaMax: 25.0,
+        sensibilidadMouse: 0.008,
+        sensibilidadZoom: 0.0025
+    };
+
+  CONVERSIÓN ESFÉRICA → CARTESIANA:
+    function obtenerEyeCamara() {
+        const cosElevacion = Math.cos(camera.elevacion);
+        const x = camera.target[0] + camera.distancia * cosElevacion
+                  * Math.sin(camera.azimut);
+        const y = camera.target[1] + camera.distancia
+                  * Math.sin(camera.elevacion);
+        const z = camera.target[2] + camera.distancia * cosElevacion
+                  * Math.cos(camera.azimut);
+        return [x, y, z];
+    }
+
+    function obtenerViewCamara() {
+        const eye = obtenerEyeCamara();
+        return lookAt(eye, camera.target, [0.0, 1.0, 0.0]);
+    }
+
+CONTROLES
+--------------------------------------------------------------------------------
+  Entrada          | Acción                | Variable
+  -----------------+-----------------------+-------------------
+  Arrastrar mouse  | Orbitar               | azimut / elevación
+  Rueda            | Zoom                  | distancia
+  ← →              | Rotación horizontal   | azimut
+  ↑ ↓              | Rotación vertical     | elevación
+  + / -            | Zoom fino             | distancia
+  R                | Reset                 | todos
+
+LÍMITE DE ELEVACIÓN
+--------------------------------------------------------------------------------
+  const limiteVertical = Math.PI / 2 - 0.05;
+  camera.elevacion = limitar(camera.elevacion, -limiteVertical, limiteVertical);
+
+  Evita que lookAt se vuelva degenerado cuando la cámara mira
+  exactamente hacia arriba/abajo.
+
+VIEW DINÁMICA
+--------------------------------------------------------------------------------
+  La matriz View se recalcula CADA FRAME:
+    const view = obtenerViewCamara();
+    gl.useProgram(programaCuerpo);
+    gl.uniformMatrix4fv(cuerpoViewLoc, false, view);
+    gl.useProgram(programaLinea);
+    gl.uniformMatrix4fv(lineaViewLoc, false, view);
+
+SEPARACIÓN EVENTO/ESTADO/RENDER
+--------------------------------------------------------------------------------
+  Evento → cambia estado de cámara
+  Render Loop → lee estado, construye View, dibuja
+
+ZOOM ORBITAL VS FOV
+--------------------------------------------------------------------------------
+  Acción            | Qué cambia
+  ------------------+---------------------------
+  Rueda / + / -     | distancia de la cámara
+  Modificar FOV     | matriz Projection
+  Arrastrar mouse   | azimut y elevación
+  Mover planeta     | matriz Model del planeta
+
+
+================================================================================
+PARTE XIV — MULTI-OBJETO Y MULTI-SHADER
+================================================================================
+
+MISMA GEOMETRÍA, DISTINTOS OBJETOS (PASO 10)
+--------------------------------------------------------------------------------
+  function dibujarCuerpo(textura, modelMatrix, emisivo) {
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, textura);
+      gl.uniformMatrix4fv(modelLoc, false, modelMatrix);
+      gl.uniform1i(emissiveLoc, emisivo ? 1 : 0);
+      gl.drawElements(gl.TRIANGLES, esfera.indices.length,
+                      gl.UNSIGNED_SHORT, 0);
+  }
+
+MÚLTIPLES PROGRAMAS DE SHADER (PASO 14)
+--------------------------------------------------------------------------------
+  programaCuerpo ... posición + normal + UV + textura + iluminación
+  programaLinea .... solo posición + color uniforme
+
+  IDEA: una escena puede usar diferentes programas de GPU
+        según el objeto.
+
+OBJETOS EN LA ESCENA FINAL (SISTEMA SOLAR)
+--------------------------------------------------------------------------------
+  Cuerpo | Textura    | Emisivo | Escala | Movimiento
+  -------+------------+---------+--------+-----------------------
+  Sol    | sol.jpg    | true    | 1.35   | Rotación propia
+  Tierra | tierra.jpg | false   | 0.55   | Rotación + revolución
+  Luna   | gris 1×1   | false   | 0.18   | Rotación + revolución
+
+
+================================================================================
+PARTE XV — CONCEPTOS TRANSVERSALES
+================================================================================
+
+HOMOGÉNEAS
+--------------------------------------------------------------------------------
+  2D: (x, y) → (x, y, 1) con matrices 3×3
+  3D: (x, y, z) → (x, y, z, 1) con matrices 4×4
+  Permiten representar traslación como multiplicación matricial.
+
+ORDEN DE TRANSFORMACIONES
+--------------------------------------------------------------------------------
+  T · R · S ≠ S · R · T
+  La multiplicación matricial NO es conmutativa.
+  La operación más cercana al punto se aplica primero.
+
+DEPTH TEST (PASO 5)
+--------------------------------------------------------------------------------
+  gl.enable(gl.DEPTH_TEST);
+  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+  Sin esto, superficies traseras se dibujan encima de delanteras.
+
+VIEWPORT
+--------------------------------------------------------------------------------
+  gl.viewport(0, 0, canvas.width, canvas.height);
+
+ESTADOS DE WEBGL USADOS
+--------------------------------------------------------------------------------
+  DEPTH_TEST ......... gl.enable(gl.DEPTH_TEST)
+  Limpieza color ..... gl.clear(gl.COLOR_BUFFER_BIT)
+  Limpieza prof. ..... gl.clear(gl.DEPTH_BUFFER_BIT)
+
+TIPOS DE DATOS JAVASCRIPT → GPU
+--------------------------------------------------------------------------------
+  JS            | GPU                | Uso
+  --------------+--------------------+-----------------------------
+  Float32Array  | gl.FLOAT           | Posiciones, normales, UV, matrices
+  Uint16Array   | gl.UNSIGNED_SHORT  | Índices
+  Uint8Array    | gl.UNSIGNED_BYTE   | Datos de textura
+
+
+================================================================================
+PARTE XVI — RESUMEN DE FÓRMULAS CLAVE
+================================================================================
+
+  FÓRMULA                                              USO
+  ---------------------------------------------------  --------------------------
+  Pclip = P · V · M · Plocal                           Pipeline completo
+  x = r·sin(φ)·cos(θ)                                  Esfera
+  y = r·cos(φ)                                         Esfera
+  z = r·sin(φ)·sin(θ)                                  Esfera
+  I = max(0, N·L)                                      Lambert difuso
+  L = normalize(LightPos - FragPos)                    Luz puntual
+  M = T · R · S                                        Composición transformaciones
+  Mórbita = RY(θ) · T(dist)                            Órbita
+  Mluna = Mtierra_sistema · Mluna_local                Jerarquía
+  incremento = velocidad × deltaTime                   Animación
+  eye = target + dist·(cos(el)·sin(az), sin(el),       Cámara orbital
+                      cos(el)·cos(az))
+
+
+================================================================================
+PARTE XVII — LO QUE AÚN NO SE HA HECHO
+================================================================================
+
+  - Clases Object3D, Mesh, Material, Geometry, Light, Camera, Scene, Renderer
+  - Módulos/archivos separados (todo está en main.js)
+  - Three.js (se introduce en Unidad II)
+  - WebGPU + WGSL (final del curso)
+  - Codex (repotenciación final)
+  - Selección de planetas con mouse
+  - Fondo de estrellas
+  - Inclinación axial de la Tierra
+  - Textura lunar real
+  - Órbitas inclinadas realistas
+  - Sombras, iluminación especular, atenuación
+  - Paneo lateral de cámara
+  - UI con botones/información
+
+
+================================================================================
+PARTE XVIII — ESTRUCTURA DEL PROYECTO ISLA-MOLINO
+================================================================================
+
+DECISIÓN PREVIA: CÓMO CARGAR MÓDULOS SIN BUNDLER
+--------------------------------------------------------------------------------
+  Opción 1: <script type="module"> con import/export
+    Pros: código limpio, dependencias explícitas, estándar moderno
+    Contras: requiere servidor HTTP local (Antigravity ya lo ofrece)
+
+  Opción 2: Muchos <script> clásicos en orden
+    Pros: funciona con file://
+    Contras: orden frágil, variables globales, difícil mantener
+
+  RECOMENDACIÓN: módulos ES (type="module").
+
+  <script type="module" src="js/main.js"></script>
+
+ESTRUCTURA COMPLETA DE CARPETAS
+--------------------------------------------------------------------------------
+  isla-molino/
+  │
+  ├── index.html
+  │
+  ├── assets/
+  │   ├── textures/
+  │   │   ├── arena.jpg
+  │   │   ├── roca.jpg
+  │   │   ├── madera.jpg
+  │   │   ├── techo.jpg
+  │   │   ├── agua_normal.png
+  │   │   ├── palmera_hoja.png
+  │   │   ├── cielo_dia.jpg
+  │   │   ├── cielo_noche.jpg
+  │   │   ├── sol.jpg
+  │   │   └── luna.jpg
+  │   │
+  │   └── sounds/          (opcional, si luego agregas audio)
+  │
+  └── js/
+      │
+      ├── main.js                    ← Punto de entrada
+      │
+      ├── core/                      ← Mini motor gráfico base
+      │   ├── GLContext.js
+      │   ├── Shader.js
+      │   ├── Program.js
+      │   ├── Buffer.js
+      │   ├── VAO.js
+      │   ├── Texture.js
+      │   ├── Renderer.js
+      │   └── Loop.js
+      │
+      ├── math/                      ← Matemáticas propias
+      │   ├── Vec2.js
+      │   ├── Vec3.js
+      │   ├── Vec4.js
+      │   ├── Mat3.js
+      │   ├── Mat4.js
+      │   └── MathUtils.js
+      │
+      ├── geometry/                  ← Generación procedural de mallas
+      │   ├── SphereGeometry.js
+      │   ├── HemisphereGeometry.js
+      │   ├── CylinderGeometry.js
+      │   ├── ConeGeometry.js
+      │   ├── BoxGeometry.js
+      │   ├── PlaneGeometry.js
+      │   ├── CircleGeometry.js
+      │   └── GeometryFactory.js
+      │
+      ├── shaders/                   ← Código GLSL como strings JS
+      │   ├── body.vert.js
+      │   ├── body.frag.js
+      │   ├── water.vert.js
+      │   ├── water.frag.js
+      │   ├── sky.vert.js
+      │   ├── sky.frag.js
+      │   ├── foliage.vert.js
+      │   ├── foliage.frag.js
+      │   ├── line.vert.js
+      │   ├── line.frag.js
+      │   ├── postprocess.vert.js
+      │   └── postprocess.frag.js
+      │
+      ├── scene/                     ← Objetos de la escena
+      │   ├── Object3D.js
+      │   ├── Mesh.js
+      │   ├── Line.js
+      │   ├── Scene.js
+      │   ├── Camera.js
+      │   │
+      │   ├── lights/
+      │   │   ├── DirectionalLight.js
+      │   │   ├── PointLight.js
+      │   │   └── AmbientLight.js
+      │   │
+      │   ├── materials/
+      │   │   ├── Material.js
+      │   │   ├── StandardMaterial.js
+      │   │   ├── EmissiveMaterial.js
+      │   │   ├── WaterMaterial.js
+      │   │   ├── FoliageMaterial.js
+      │   │   └── SkyMaterial.js
+      │   │
+      │   └── objects/
+      │       ├── Island.js
+      │       ├── Windmill.js
+      │       ├── Dock.js
+      │       ├── Path.js
+      │       ├── Boat.js
+      │       ├── PalmTree.js
+      │       ├── Rock.js
+      │       └── Sea.js
+      │
+      ├── world/                     ← Sistemas que gobiernan la escena
+      │   ├── DayNightCycle.js
+      │   ├── WindSystem.js
+      │   ├── WaveSystem.js
+      │   └── Buoyancy.js
+      │
+      ├── input/
+      │   ├── InputManager.js
+      │   ├── CameraController.js
+      │   └── keybindings.js
+      │
+      ├── loaders/
+      │   ├── loadTexture.js
+      │   └── loadShaderSource.js
+      │
+      ├── config/
+      │   ├── constants.js
+      │   └── sceneConfig.js
+      │
+      └── utils/
+          ├── logger.js
+          └── debug.js
+
+
+================================================================================
+PARTE XIX — RESPONSABILIDAD DE CADA CARPETA
+================================================================================
+
+core/ — MINI MOTOR WEBGL2
+--------------------------------------------------------------------------------
+  Todo lo que en clase hacías con gl.* directo, ahora encapsulado.
+  Nada de lógica de escena aquí.
+
+  GLContext.js ....... Obtiene gl, valida, activa depth test, viewport
+  Shader.js .......... compile(type, source) + verificación con logs
+  Program.js ......... link(vs, fs) + cache de uniforms + setters
+  Buffer.js .......... Crea VBO/EBO, sube datos, bindea
+  VAO.js ............. Configura vertexAttribPointer con stride/offset
+  Texture.js ......... Carga imagen, mipmaps, filtros, wrap, unidades
+  Renderer.js ........ clear(), drawElements(), drawArrays(), orden
+  Loop.js ............ requestAnimationFrame + cálculo de deltaTime
+
+math/ — MATEMÁTICAS PROPIAS
+--------------------------------------------------------------------------------
+  Todo lo del Paso 3 y 5, en clases con métodos estáticos y de instancia.
+  NO uses glMatrix.
+
+  Vec3.dot, Vec3.cross, Vec3.normalize, Vec3.sub, Vec3.add, Vec3.length
+  Mat4.identity, Mat4.translation, Mat4.scale, Mat4.rotationX/Y/Z,
+  Mat4.perspective, Mat4.lookAt, Mat4.multiply, Mat4.transpose, Mat4.inverse
+
+geometry/ — MALLAS PROCEDURALES
+--------------------------------------------------------------------------------
+  Cada archivo exporta una función que devuelve:
+    { positions, normals, uvs, indices }
+
+  SphereGeometry(radius, lat, lon) ....................... Paso 7
+  HemisphereGeometry ..................................... Mitad de esfera
+  CylinderGeometry(radioSup, radioInf, altura, segmentos)  Molino, ejes
+  ConeGeometry ........................................... Techo del molino
+  BoxGeometry(w, h, d) ................................... Muelle, camino
+  PlaneGeometry(w, d, subdivX, subdivZ) .................. Agua, camino
+  GeometryFactory ........................................ Cache de mallas
+
+shaders/ — GLSL COMO MÓDULOS JS
+--------------------------------------------------------------------------------
+  Cada shader es un export default con un template string.
+
+  body.vert/frag ......... Posición + normal + UV + textura + iluminación
+  water.vert/frag ........ Olas por vértice, normales, reflejo especular
+  sky.vert/frag .......... Gradiente cielo según altura del sol
+  foliage.vert/frag ...... Desplazamiento por viento (uTime + uWind)
+
+scene/ — GRAFO DE ESCENA
+--------------------------------------------------------------------------------
+  Object3D ........ position, rotation, scale, parent, children,
+                    localMatrix, worldMatrix, add(child), updateWorldMatrix()
+  Mesh ............ Object3D + geometry + material
+  Scene ........... Object3D raíz + lista plana de meshes para dibujar
+  Camera .......... target, distancia, azimut, elevacion;
+                    produce viewMatrix + projectionMatrix
+  lights/ ......... Sol y luna como luces con posición e intensidad
+  materials/ ...... Envuelven un Program y sus uniforms, bind(state)
+  objects/ ........ Cada construcción concreta (isla, molino, muelle...)
+
+world/ — SISTEMAS TEMPORALES
+--------------------------------------------------------------------------------
+  Cosas que evolucionan en el tiempo y afectan a varios objetos.
+
+  DayNightCycle ... Ángulo del sol (0 a 2π), color del cielo,
+                    intensidad y color de luz solar, posición de luna
+  WindSystem ...... Dirección e intensidad del viento
+  WaveSystem ...... Función altura(x, z, t) con suma de senos
+  Buoyancy ........ Dado WaveSystem, calcula posición y orientación del barco
+
+input/ — ENTRADA DEL USUARIO
+--------------------------------------------------------------------------------
+  InputManager ....... Guarda estado de teclado/mouse
+  CameraController ... Interpreta input y modifica la cámara
+  keybindings ........ Mapa de teclas → acciones
+
+loaders/ — CARGA ASÍNCRONA
+--------------------------------------------------------------------------------
+  loadTexture(url) ... Como en Paso 10, textura blanca provisional + mipmaps
+
+config/ — PARÁMETROS
+--------------------------------------------------------------------------------
+  Todo número mágico (colores, escalas, velocidades) sale del código
+  y vive aquí.
+
+utils/ — AUXILIARES
+--------------------------------------------------------------------------------
+  logger.js ... log.warn, log.error con prefijo
+  debug.js .... Dibujar ejes, normales, wireframe
+
+
+================================================================================
+PARTE XX — MAPEO DE OBJETOS A GEOMETRÍA
+================================================================================
+
+  OBJETO          | GEOMETRÍA               | MATERIAL            | NOTAS
+  ----------------+-------------------------+---------------------+----------
+  Isla            | HemisphereGeometry      | StandardMaterial    | Cortar a y=0
+  Camino          | Muchos BoxGeometry      | StandardMaterial    | En cola
+  Muelle          | Box + Cylinder          | StandardMaterial    | Tablones+postes
+  Molino cuerpo   | Cylinder(radioSup<Inf)  | StandardMaterial    | Base ancha
+  Molino techo    | ConeGeometry            | StandardMaterial    | Encima
+  Ejes            | Cylinder delgado alto   | StandardMaterial    | Dos, cruz
+  Aspas           | Box aplanado            | StandardMaterial    | 4, rotan
+  Palmera tronco  | CylinderGeometry        | StandardMaterial    | Corteza
+  Palmera hojas   | PlaneGeometry           | FoliageMaterial     | Viento
+  Rocas           | SphereGeometry deform.  | StandardMaterial    | Ruido
+  Barco casco     | Box o media esfera      | StandardMaterial    | Madera
+  Barco vela      | PlaneGeometry           | FoliageMaterial     | Ondula
+  Barco mástil    | CylinderGeometry        | StandardMaterial    | Madera
+  Mar             | PlaneGeometry grande    | WaterMaterial       | Olas shader
+  Sol             | Disco/emisivo           | EmissiveMaterial    | DayNightCycle
+  Luna            | Disco/emisivo           | EmissiveMaterial    | Opuesto al sol
+
+
+================================================================================
+PARTE XXI — MAPEO DE SISTEMAS A ARCHIVOS
+================================================================================
+
+  SISTEMA           | ARCHIVO                        | QUÉ CONTROLA
+  ------------------+--------------------------------+------------------------
+  Día/noche         | world/DayNightCycle.js         | Ángulo sol, color cielo
+  Olas              | world/WaveSystem.js            | altura(x,z,t) suma senos
+  Flotación barco   | world/Buoyancy.js              | Posición Y + rotación
+  Viento            | world/WindSystem.js            | Dirección + intensidad
+  Palmeras          | PalmTree + FoliageMaterial     | Desplazamiento por viento
+  Aspas molino      | Windmill.js                    | Rotación ∝ viento
+  Cámara            | Camera.js + CameraController   | Órbita, zoom, target
+  Ciclo render      | core/Loop.js                   | deltaTime, rAF
+
+
+================================================================================
+PARTE XXII — CONVENCIONES Y ORDEN DE CONSTRUCCIÓN
+================================================================================
+
+CONVENCIONES QUE TE SALVARÁN
+--------------------------------------------------------------------------------
+  1. Un archivo = una responsabilidad. Si dudas, divide.
+  2. Exportaciones nombradas, no default (excepto shaders como string).
+  3. Sin variables globales. Todo pasa por import.
+  4. Constantes en config/. Nada de números mágicos dispersos.
+  5. Shaders como strings en shaders/*.js, no en HTML.
+  6. Una textura = una instancia de Texture. No rellenes uniforms a mano.
+  7. deltaTime en segundos siempre. Nunca ms dentro de la lógica.
+  8. Jerarquía padre-hijo para: muelle→tablones, molino→aspas,
+     palmera→hojas, barco→vela.
+  9. Sistemas (world/) no dibujan. Solo actualizan estado.
+ 10. Objetos (scene/objects/) no actualizan tiempo global. Reciben dt.
+
+ORDEN DE CONSTRUCCIÓN RECOMENDADO
+--------------------------------------------------------------------------------
+  1.  index.html + main.js + core/GLContext + core/Renderer → canvas limpio
+  2.  math/Mat4 + math/Vec3 → base matemática
+  3.  core/Shader + core/Program + core/Buffer + core/VAO → pipeline mínimo
+  4.  geometry/SphereGeometry + geometry/PlaneGeometry → primeras mallas
+  5.  core/Texture + loaders/loadTexture → texturas reales
+  6.  scene/Object3D + scene/Mesh + scene/Scene → grafo
+  7.  scene/Camera + input/InputManager + input/CameraController → interacción
+  8.  scene/lights/* + shaders/body.* → iluminación
+  9.  scene/objects/Island → primera pieza del mundo
+  10. geometry/CylinderGeometry + ConeGeometry + BoxGeometry → molino, muelle
+  11. world/WindSystem + WaveSystem + DayNightCycle → ambiente vivo
+  12. scene/objects/PalmTree, Boat, Rock, Sea → completar escena
+  13. shaders/water.*, shaders/foliage.*, shaders/sky.* → materiales especiales
+
+  Cada paso es ejecutable y visible. Nunca tengas más de un paso roto
+  a la vez.
+
+ESQUELETO DE main.js
+--------------------------------------------------------------------------------
+  import { initGL } from './core/GLContext.js';
+  import { Renderer } from './core/Renderer.js';
+  import { Loop } from './core/Loop.js';
+  import { Scene } from './scene/Scene.js';
+  import { Camera } from './scene/Camera.js';
+  import { DirectionalLight } from './scene/lights/DirectionalLight.js';
+  import { AmbientLight } from './scene/lights/AmbientLight.js';
+  import { DayNightCycle } from './world/DayNightCycle.js';
+  import { WindSystem } from './world/WindSystem.js';
+  import { WaveSystem } from './world/WaveSystem.js';
+  import { Island } from './scene/objects/Island.js';
+  import { Windmill } from './scene/objects/Windmill.js';
+  import { Dock } from './scene/objects/Dock.js';
+  import { Path } from './scene/objects/Path.js';
+  import { Boat } from './scene/objects/Boat.js';
+  import { PalmTree } from './scene/objects/PalmTree.js';
+  import { Rock } from './scene/objects/Rock.js';
+  import { Sea } from './scene/objects/Sea.js';
+  import { InputManager } from './input/InputManager.js';
+  import { CameraController } from './input/CameraController.js';
+
+  const canvas = document.getElementById('glCanvas');
+  const gl = initGL(canvas);
+  const renderer = new Renderer(gl, canvas);
+
+  const scene = new Scene();
+  const camera = new Camera({ target: [0, 1, 0], distancia: 20 });
+  const sun = new DirectionalLight();
+  const ambient = new AmbientLight(0.15);
+  scene.add(sun, ambient);
+
+  const dayNight = new DayNightCycle(sun);
+  const wind = new WindSystem();
+  const waves = new WaveSystem();
+
+  const island  = new Island();
+  const molino  = new Windmill();
+  const muelle  = new Dock();
+  const camino  = new Path();
+  const barco   = new Boat();
+  const palmera = new PalmTree();
+  const roca    = new Rock();
+  const mar     = new Sea(waves);
+
+  scene.add(island, molino, muelle, camino, barco, palmera, roca, mar);
+
+  const input = new InputManager(canvas);
+  const camCtrl = new CameraController(camera, input);
+
+  const loop = new Loop((dt, t) => {
+    dayNight.update(dt);
+    wind.update(dt);
+    waves.update(dt);
+    camCtrl.update(dt);
+
+    barco.update(dt, waves);       // flotación
+    palmera.update(dt, wind);      // viento
+    molino.update(dt, wind);       // aspas giran
+
+    scene.updateWorldMatrices();
+    renderer.render(scene, camera, { sun, ambient });
+  });
+
+  loop.start();
+
+
+================================================================================
+PARTE XXIII — ÁRBOL FINAL RESUMIDO
+================================================================================
+
+  isla-molino/
+  ├── index.html
+  ├── assets/textures/*.{jpg,png}
+  └── js/
+      ├── main.js
+      ├── core/      (GLContext, Shader, Program, Buffer, VAO,
+      │               Texture, Renderer, Loop)
+      ├── math/      (Vec2, Vec3, Vec4, Mat3, Mat4, MathUtils)
+      ├── geometry/  (Sphere, Hemisphere, Cylinder, Cone, Box,
+      │               Plane, Circle, Factory)
+      ├── shaders/   (body, water, sky, foliage, line, postprocess)
+      ├── scene/     (Object3D, Mesh, Line, Scene, Camera,
+      │               lights/, materials/, objects/)
+      ├── world/     (DayNightCycle, WindSystem, WaveSystem, Buoyancy)
+      ├── input/     (InputManager, CameraController, keybindings)
+      ├── loaders/   (loadTexture, loadShaderSource)
+      ├── config/    (constants, sceneConfig)
+      └── utils/     (logger, debug)
+
+LO QUE GANAS CON ESTA ESTRUCTURA
+--------------------------------------------------------------------------------
+  - Aislar errores: si el agua se ve mal, abres solo
+    shaders/water.* y world/WaveSystem.js
+  - Cambiar sin romper: ajustar la isla no toca el molino
+  - Reutilizar lo de clase: SphereGeometry, Mat4, lookAt, perspectiva,
+    deltaTime, VAO, Shader son los mismos conceptos del Sistema Solar,
+    solo reorganizados
+  - Escalar: agregar una gaviota, un faro o lluvia es crear un archivo
+    nuevo en scene/objects/ y un sistema en world/ si aplica
+  - Cumplir la consigna: todo es código puro, WebGL2 directo,
+    GLSL ES 3.00, sin Three.js, sin Blender, sin bundlers
+
+================================================================================
+FIN
+================================================================================

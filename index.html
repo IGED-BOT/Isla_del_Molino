@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Isla del Molino — WebGL2</title>
+  <style>
+    html, body {
+      margin: 0;
+      height: 100%;
+      overflow: hidden;
+      background: #000;
+      font-family: Segoe UI, system-ui, sans-serif;
+    }
+    canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+    #hint {
+      position: absolute;
+      left: 12px;
+      bottom: 12px;
+      color: rgba(255, 255, 255, 0.72);
+      font-size: 12px;
+      line-height: 1.45;
+      pointer-events: none;
+      text-shadow: 0 1px 2px #000;
+    }
+    #banner {
+      display: none;
+      position: absolute;
+      top: 16px;
+      left: 16px;
+      right: 16px;
+      max-width: 680px;
+      margin: 0 auto;
+      background: rgba(185, 28, 28, 0.94);
+      color: #fff;
+      padding: 14px 18px;
+      border-radius: 8px;
+      font-size: 13px;
+      line-height: 1.5;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+      z-index: 100;
+    }
+    #banner code {
+      background: rgba(0, 0, 0, 0.35);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: Consolas, monospace;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="glCanvas"></canvas>
+  <div id="banner"></div>
+  <div id="hint">
+    Arrastrar: orbitar · Rueda / Pellizco: zoom · Flechas / + - : cámara · R: reset
+  </div>
+
+  <script>
+    class ErrorBanner {
+    constructor() {
+      this.banner = document.getElementById('banner');
+      window.addEventListener('error', this);
+
+      if (window.location.protocol === 'file:') {
+        this.banner.style.display = 'block';
+        this.banner.innerHTML = '<strong>Atención (protocolo local):</strong> Los navegadores bloquean módulos JavaScript (<code>type="module"</code>) por política de seguridad CORS al abrir archivos directamente con doble clic (<code>file://</code>).<br>Para ejecutar el proyecto, ábrelo con un servidor HTTP local, por ejemplo:<br>• En VS Code: clic derecho en <code>index.html</code> → <em>Open with Live Server</em><br>• En terminal: <code>npx serve .</code> o <code>python -m http.server 8080</code>';
+      }
+    }
+
+    handleEvent(event) {
+      if (this.banner && this.banner.style.display !== 'block') {
+        this.banner.style.display = 'block';
+        this.banner.textContent = 'Error en la ejecución: ' + (event.message || event);
+      }
+    }
+    }
+
+    new ErrorBanner();
+  </script>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
